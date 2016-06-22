@@ -57,12 +57,14 @@ class SearchInProjectCommand(sublime_plugin.WindowCommand):
         folders = self.search_folders()
 
         self.common_path = self.find_common_path(folders)
+        print("common_path=" + self.common_path);
         try:
             self.results = self.engine.run(text, folders)
             if self.results:
-                self.results = [[result[0].replace(self.common_path.replace('\"', ''), ''), result[1]] for result in self.results]
-                self.results.append("``` List results in view ```")
+                self.results = [[result[0].replace(self.common_path, ''), result[1]] for result in self.results]
+                self.results.append(">>> List results in view <<<")
                 self.window.show_quick_panel(self.results, self.goto_result)
+                # self.list_in_view()
             else:
                 self.results = []
                 sublime.message_dialog('No results')
@@ -76,7 +78,7 @@ class SearchInProjectCommand(sublime_plugin.WindowCommand):
             if file_no == len(self.results) - 1: # last result is "list in view"
                 self.list_in_view()
             else:
-                file_name = self.common_path.replace('\"', '') + self.results[file_no][0]
+                file_name = self.common_path + self.results[file_no][0]
                 view = self.window.open_file(file_name, sublime.ENCODED_POSITION)
                 regions = view.find_all(self.last_search_string)
                 view.add_regions("search_in_project", regions, "entity.name.filename.find-in-files", "circle", sublime.DRAW_OUTLINED)
@@ -87,7 +89,7 @@ class SearchInProjectCommand(sublime_plugin.WindowCommand):
         view.run_command('search_in_project_results',
             {'query': self.last_search_string,
              'results': self.results,
-             'common_path': self.common_path.replace('\"', '')})
+             'common_path': self.common_path})
 
     def search_folders(self):
         search_folders = self.window.folders()
@@ -101,7 +103,7 @@ class SearchInProjectCommand(sublime_plugin.WindowCommand):
 
     def find_common_path(self, paths):
         paths = [path.replace("\"", "") for path in paths]
-        paths = [path.split("/") for path in paths]
+        paths = [path.split(os.path.sep) for path in paths]
         common_path = []
         while 0 not in [len(path) for path in paths]:
             next_segment = list(set([path.pop(0) for path in paths]))
@@ -109,17 +111,19 @@ class SearchInProjectCommand(sublime_plugin.WindowCommand):
                 common_path += next_segment
             else:
                 break
-        return "\"" + "/".join(common_path) + "/\""
+        return os.path.sep.join(common_path) + os.path.sep
 
 class SearchInProjectResultsCommand(sublime_plugin.TextCommand):
     def format_result(self, common_path, filename, lines):
-        lines_text = "\n".join(["  %s: %s" % (location, text) for location, text in lines])
+        lines_text = "\n".join(["\n\t%s" % (text) for location, text in lines])
         return "%s%s:\n%s\n" % (common_path, filename, lines_text)
 
     def format_results(self, common_path, results, query):
         grouped_by_filename = defaultdict(list)
         for result in results:
-            filename, location = result[0].split(':', 1)
+            print("result[0]=" + result[0]);
+            location = result[0]
+            filename = result[0]
             text = result[1]
             grouped_by_filename[filename].append((location, text))
         line_count = len(results)
@@ -130,7 +134,7 @@ class SearchInProjectResultsCommand(sublime_plugin.TextCommand):
             + "\n".join(file_results)
 
     def run(self, edit, common_path, results, query):
-        self.view.set_name('Find Results')
+        self.view.set_name('Search in Project Find Results')
         self.view.set_scratch(True)
         self.view.set_syntax_file('Packages/Default/Find Results.hidden-tmLanguage')
         results_text = self.format_results(common_path, results, query)
